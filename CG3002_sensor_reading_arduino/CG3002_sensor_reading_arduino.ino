@@ -19,7 +19,7 @@ MPU6050 accelgyroIC2(0x69);
 
 #define AD0_PIN_0 4  // Connect this pin to the AD0 pin on IMU #0
 #define AD0_PIN_1 5  // Connect this pin to the AD0 pin on IMU #1
-#define DATA_SIZE 34
+#define DATA_SIZE 32
 
 int16_t ax1, ay1, az1;
 int16_t gx1, gy1, gz1;
@@ -27,22 +27,17 @@ int16_t gx1, gy1, gz1;
 int16_t ax2, ay2, az2;
 int16_t gx2, gy2, gz2;
 
-int analogPin0 = 0;     // potentiometer wiper (middle terminal) connected to analog pin 0
-                       // outside leads to ground and +5V
-int analogPin1 = 1;     // potentiometer wiper (middle terminal) connected to analog pin 1
-                       // outside leads to ground and +5V
 float voltage, current, power, energy, totalenergy = 0;
 
 float currenttime, pasttime;
-
-char serialized[35] = {0};
-char xors[2] = {0};
 
 struct dataPacket {
     int16_t ax1, ay1, az1, gx1, gy1, gz1, ax2, ay2, az2, gx2, gy2, gz2;
 
     int16_t voltage, current, power, energy;
 } dataPKT;
+
+char serialized[35] = {0};
 
 void readData();
 void updateDataPacket();
@@ -60,23 +55,23 @@ void setup() {
     // (38400 chosen because it works as well at 8MHz as it does at 16MHz,
     //but
     // it's really up to you depending on your project)
-    Serial.begin(38400);
+    // Serial.begin(38400);
     Serial1.begin(115200);
 
     // initialize device
-    Serial.println("Initializing I2C devices...");
+    // Serial1.println("Initializing I2C devices...");
     //accelgyro.initialize();
     accelgyroIC1.initialize();
     accelgyroIC2.initialize();
 
     // verify connection
-    Serial.println("Testing device connections...");
-    Serial.println(accelgyroIC1.testConnection() ? "MPU6050 #1 connection successful" : "MPU6050 connection failed");
-    Serial.println(accelgyroIC2.testConnection() ? "MPU6050 #2 connection successful" : "MPU6050 connection failed");
+    // Serial1.println("Testing device connections...");
+    // Serial1.println(accelgyroIC1.testConnection() ? "MPU6050 #1 connection successful" : "MPU6050 connection failed");
+    // Serial1.println(accelgyroIC2.testConnection() ? "MPU6050 #2 connection successful" : "MPU6050 connection failed");
 
     // Configure analog pins as input
-    pinMode(A0,INPUT);
-    pinMode(A1,INPUT);
+    pinMode(A0, INPUT);
+    pinMode(A1, INPUT);
 }
 
 void loop() {
@@ -84,7 +79,6 @@ void loop() {
     readData();
     updateDataPacket();
     sendDataPacket();
-
     delay(500);
 }
 
@@ -101,7 +95,7 @@ void readData() {
     voltage = 2.0 * voltage; // Account for halving of voltage by voltage divider
 
     current = analogRead(A1) * 5.0 / 1023.0; // read the input pin1 for current sensor
-    current= (current * 10.0) / 9.0;
+    current = (current * 10.0) / 9.0;
 
     power = voltage * current;
 
@@ -143,6 +137,16 @@ char* serializeByte(byte val, char* buf) {
     return buf + 1;
 }
 
+byte getXORCheckSum() {
+    byte checksum = 0;
+
+    for(int i = 0; i < DATA_SIZE; i++){
+        checksum = (serialized[i] ^ checksum);
+    }
+
+    return checksum;
+}
+
 void serializeDataPacket() {
     char* buf = serialized;
     buf = serializeInt16(dataPKT.ax1, buf);
@@ -165,16 +169,6 @@ void serializeDataPacket() {
     buf = serializeInt16(dataPKT.energy, buf);
 
     buf = serializeByte(getXORCheckSum(), buf);
-}
-
-byte getXORCheckSum() {
-    byte checksum = 0;
-
-    for(int i = 0; i < DATA_SIZE; i++){
-        checksum = (serialized[i] ^ checksum);
-    }
-
-    return checksum;
 }
 
 void sendDataPacket() {
